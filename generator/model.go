@@ -156,11 +156,12 @@ func makeGenDefinition(name, pkg string, schema spec.Schema, specDoc *spec.Docum
 	}
 
 	return &GenDefinition{
-		Package:        mangleName(filepath.Base(pkg), "definitions"),
-		GenSchema:      pg.GenSchema,
-		DependsOn:      pg.Dependencies,
-		DefaultImports: defaultImports,
-		ExtraSchemas:   extras,
+		Package:             mangleName(filepath.Base(pkg), "definitions"),
+		GenSchema:           pg.GenSchema,
+		DependsOn:           pg.Dependencies,
+		DefaultImports:      defaultImports,
+		ExtraSchemas:        extras,
+		DiscriminatorValues: pg.DiscriminatorValues,
 	}, nil
 }
 
@@ -168,12 +169,13 @@ func makeGenDefinition(name, pkg string, schema spec.Schema, specDoc *spec.Docum
 // defintion from a swagger spec
 type GenDefinition struct {
 	GenSchema
-	Package          string
-	Imports          map[string]string
-	DefaultImports   []string
-	ExtraSchemas     []GenSchema
-	DependsOn        []string
-	IncludeValidator bool
+	Package             string
+	Imports             map[string]string
+	DefaultImports      []string
+	ExtraSchemas        []GenSchema
+	DiscriminatorValues map[string]GenSchema
+	DependsOn           []string
+	IncludeValidator    bool
 }
 
 // GenSchemaList is a list of schemas for generation.
@@ -206,9 +208,11 @@ type schemaGenContext struct {
 
 	Index int
 
-	GenSchema    GenSchema
-	Dependencies []string
-	ExtraSchemas map[string]GenSchema
+	GenSchema             GenSchema
+	Dependencies          []string
+	ExtraSchemas          map[string]GenSchema
+	DiscriminatorValues   map[string]GenSchema
+	DiscriminatorJSONName string
 }
 
 func (sg *schemaGenContext) NewSliceBranch(schema *spec.Schema) *schemaGenContext {
@@ -840,7 +844,7 @@ func (sg *schemaGenContext) shortCircuitNamedRef() (bool, error) {
 	tpe.IsAnonymous = false
 	tpe.IsNullable = sg.TypeResolver.isNullable(&sg.Schema)
 
-	item := sg.NewCompositionBranch(sg.Schema, 0)
+	item := sg.NewCompositionBranch(sg.Schema, sg.Index)
 	if err := item.makeGenSchema(); err != nil {
 		return true, err
 	}
@@ -887,6 +891,10 @@ func (sg *schemaGenContext) liftSpecialAllOf() error {
 	return nil
 }
 
+func (sg *schemaGenContext) buildDiscriminatorValues() error {
+	return nil
+}
+
 func (sg *schemaGenContext) makeGenSchema() error {
 	ex := ""
 	if sg.Schema.Example != nil {
@@ -905,6 +913,10 @@ func (sg *schemaGenContext) makeGenSchema() error {
 	sg.GenSchema.sharedValidations = sg.schemaValidations()
 	sg.GenSchema.ReadOnly = sg.Schema.ReadOnly
 
+	if err := sg.buildDiscriminatorValues(); err != nil {
+		return err
+	}
+
 	var err error
 	returns, err := sg.shortCircuitNamedRef()
 	if err != nil {
@@ -913,11 +925,12 @@ func (sg *schemaGenContext) makeGenSchema() error {
 	if returns {
 		return nil
 	}
+
 	if err := sg.liftSpecialAllOf(); err != nil {
 		return err
 	}
-	nullableOverride := sg.GenSchema.IsNullable
 
+	nullableOverride := sg.GenSchema.IsNullable
 	if err := sg.buildAllOf(); err != nil {
 		return err
 	}
@@ -1007,6 +1020,9 @@ type GenSchema struct {
 	AdditionalProperties    *GenSchema
 	ReadOnly                bool
 	IsVirtual               bool
+	HasDiscriminator        bool
+	IsDiscriminatorField    bool
+	IsDiscriminated         bool
 }
 
 type sharedValidations struct {
