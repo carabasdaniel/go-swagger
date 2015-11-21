@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/go-swagger/go-swagger/spec"
 	"github.com/go-swagger/go-swagger/swag"
@@ -892,6 +893,28 @@ func (sg *schemaGenContext) liftSpecialAllOf() error {
 }
 
 func (sg *schemaGenContext) buildDiscriminatorValues() error {
+	if sg.Schema.Discriminator != "" {
+		sg.DiscriminatorJSONName = sg.Schema.Discriminator
+		// turn into an interface
+
+		discriminated := make(map[string]GenSchema)
+		// scan all the definitions to find the discriminated types?
+		for k, sch := range sg.TypeResolver.Doc.Spec().Definitions {
+			for _, aos := range sch.AllOf {
+				aurl := aos.Ref.GetURL()
+				if aurl != nil {
+					if aos.Ref.HasFragmentOnly {
+						if strings.HasSuffix(aurl.Fragment, "/"+sg.Name) {
+							// TODO: make a new schema
+							discriminated[k] = GenSchema{}
+						}
+					}
+				}
+			}
+		}
+		// scan all the operations to find out if there are discriminated types?
+	}
+
 	return nil
 }
 
@@ -912,10 +935,6 @@ func (sg *schemaGenContext) makeGenSchema() error {
 	sg.GenSchema.ReceiverName = sg.Receiver
 	sg.GenSchema.sharedValidations = sg.schemaValidations()
 	sg.GenSchema.ReadOnly = sg.Schema.ReadOnly
-
-	if err := sg.buildDiscriminatorValues(); err != nil {
-		return err
-	}
 
 	var err error
 	returns, err := sg.shortCircuitNamedRef()
@@ -968,6 +987,10 @@ func (sg *schemaGenContext) makeGenSchema() error {
 
 	if err := sg.buildProperties(); err != nil {
 		return nil
+	}
+
+	if err := sg.buildDiscriminatorValues(); err != nil {
+		return err
 	}
 
 	if err := sg.buildXMLName(); err != nil {
