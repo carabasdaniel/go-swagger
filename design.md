@@ -11,7 +11,7 @@ In addition to the middleware there are some generator commands that will use th
 
 ## The middleware
 
-Takes a raw spec document either as a []byte, and it adds the /api-docs route to serve this spec up.
+Takes a raw spec document either as a []byte, and it adds the /swagger.json route to serve this spec up.
 
 The middleware performs validation, data binding and security as defined in the swagger spec.
 It also uses the API to match request paths to functions of `func(paramsObject) (responseModel, error)`
