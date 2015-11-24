@@ -218,8 +218,15 @@ type typeResolver struct {
 	ModelName     string
 }
 
+func nameOverride(schema *spec.Schema, name string) string {
+	if gn, ok := schema.Extensions["x-go-name"]; ok {
+		return gn.(string)
+	}
+	return name
+}
+
 func (t *typeResolver) resolveSchemaRef(schema *spec.Schema) (returns bool, result resolvedType, err error) {
-	if schema.Ref.GetURL() != nil {
+	if schema.Ref.String() != "" {
 		returns = true
 		ref, er := spec.ResolveRef(t.Doc.Spec(), &schema.Ref)
 		if er != nil {

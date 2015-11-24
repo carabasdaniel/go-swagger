@@ -174,7 +174,7 @@ type GenDefinition struct {
 	Imports             map[string]string
 	DefaultImports      []string
 	ExtraSchemas        []GenSchema
-	DiscriminatorValues map[string]GenSchema
+	DiscriminatorValues map[string]string
 	DependsOn           []string
 	IncludeValidator    bool
 }
@@ -212,7 +212,7 @@ type schemaGenContext struct {
 	GenSchema             GenSchema
 	Dependencies          []string
 	ExtraSchemas          map[string]GenSchema
-	DiscriminatorValues   map[string]GenSchema
+	DiscriminatorValues   map[string]string
 	DiscriminatorJSONName string
 }
 
@@ -895,24 +895,35 @@ func (sg *schemaGenContext) liftSpecialAllOf() error {
 func (sg *schemaGenContext) buildDiscriminatorValues() error {
 	if sg.Schema.Discriminator != "" {
 		sg.DiscriminatorJSONName = sg.Schema.Discriminator
+		defStr := "#/definitions/" + sg.Name
 		// turn into an interface
 
-		discriminated := make(map[string]GenSchema)
+		discriminated := make(map[string]string)
 		// scan all the definitions to find the discriminated types?
 		for k, sch := range sg.TypeResolver.Doc.Spec().Definitions {
 			for _, aos := range sch.AllOf {
-				aurl := aos.Ref.GetURL()
-				if aurl != nil {
+				aurl := aos.Ref.String()
+				if aurl != "" {
 					if aos.Ref.HasFragmentOnly {
-						if strings.HasSuffix(aurl.Fragment, "/"+sg.Name) {
-							// TODO: make a new schema
-							discriminated[k] = GenSchema{}
+						if strings.HasSuffix(aos.Ref.String(), defStr) {
+							discriminated[k] = nameOverride(&aos, k)
 						}
 					}
 				}
 			}
 		}
+
 		// scan all the operations to find out if there are discriminated types?
+
+		// update the generator
+		if len(discriminated) > 0 {
+			if sg.DiscriminatorValues == nil {
+				sg.DiscriminatorValues = make(map[string]string)
+			}
+			for c, v := range discriminated {
+				sg.DiscriminatorValues[c] = v
+			}
+		}
 	}
 
 	return nil
